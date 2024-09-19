@@ -1,0 +1,4 @@
+#Linux
+/subsystem=undertow/configuration=handler/file=new-three-content:add(path="/var/www/project")
+/subsystem=undertow/server=default-server/host=new-three-host:add(alias=["project.demo-xr.local"])
+/subsystem=undertow/server=default-server/host=new-three-host/location=\/:add(handler=new-three-content)
