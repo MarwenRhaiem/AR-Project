@@ -1,0 +1,48 @@
+body {
+  margin: 0;
+  overflow: hidden;
+}
+
+button {
+  font-size: 16px;
+  padding: 10px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+#xr-button {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10000000000000000000;
+  background-color: #4caf50;
+  border: none;
+  color: white;
+  padding: 15px 32px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  margin: 10px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+#xr-button.active {
+  background-color: #f44336;
+  color: white;
+  transform: scale(1.05);
+  border: 2px solid white;
+}
+
+#xr-button:hover {
+  background-color: #3e8e41;
+  transform: scale(1.1);
+}
