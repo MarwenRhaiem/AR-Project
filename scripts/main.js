@@ -9,9 +9,9 @@ let track = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   var xrButton = document.getElementById("xr-button");
-  //xrButton.style.zIndex=10000;
   xrButton.addEventListener("click", onButtonClicked);
 });
+
 function onButtonClicked() {
   if (!xrSession) {
     // Check if WebXR is supported
@@ -21,17 +21,19 @@ function onButtonClicked() {
     }
     navigator.xr.isSessionSupported("immersive-ar").then((supported) => {
       if (supported) {
-        navigator.xr.requestSession("immersive-ar").then(async (session) => {
-          xrSession = session;
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: true,
+        navigator.xr
+          .requestSession("immersive-ar", { requiredFeatures: ["hit-test"] })
+          .then(async (session) => {
+            xrSession = session;
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: true,
+            });
+            const videoTracks = stream.getVideoTracks();
+            track = videoTracks[0];
+            document.getElementById("viewer-camera").srcObject = stream;
+            onSessionStarted();
           });
-          const videoTracks = stream.getVideoTracks();
-          track = videoTracks[0];
-          document.getElementById("viewer-camera").srcObject = stream;
-          onSessionStarted();
-        });
       }
     });
   } else {
@@ -59,6 +61,41 @@ async function onSessionStarted() {
     } else {
       console.log("WebGL 2 is supported");
     }
+
+    // Set up Three.js scene
+    const scene = new THREE.Scene();
+    const video = document.getElementById("viewer-camera");
+    const background_texture = new THREE.VideoTexture(video);
+    scene.background = background_texture;
+
+    // Load the Bed model
+    const loader = new GLTFLoader();
+    let bedModel;
+
+    loader.load(
+      "models/Bed.glb",
+      function (gltf) {
+        bedModel = gltf.scene;
+        bedModel.scale.set(0.5, 0.5, 0.5); // Adjust scale as needed
+        bedModel.position.set(0, 0, -1); // Set initial position
+        scene.add(bedModel);
+      },
+      undefined,
+      function (error) {
+        console.error("Error loading model: ", error);
+      }
+    );
+
+    // Start Load Flower
+    let flower;
+    loader.load(
+      "https://immersive-web.github.io/webxr-samples/media/gltf/sunflower/sunflower.gltf",
+      function (gltf) {
+        flower = gltf.scene;
+      }
+    );
+
+    // Set up the WebGLRenderer, which handles rendering to the session's base layer
     const renderer = new THREE.WebGLRenderer({
       alpha: true,
       preserveDrawingBuffer: true,
@@ -66,8 +103,6 @@ async function onSessionStarted() {
       context: gl,
     });
     renderer.autoClear = false;
-    // Create scène Three.js
-    const scene = new THREE.Scene();
 
     // Create a Three.js perspective camera
     const camera = new THREE.PerspectiveCamera();
@@ -82,7 +117,7 @@ async function onSessionStarted() {
     xrRefSpace = await xrSession.requestReferenceSpace("local");
 
     // Rendering loop for AR
-    const onXRFrame = (time, frame) => {
+    const onXRFrame = async (time, frame) => {
       xrSession.requestAnimationFrame(onXRFrame);
 
       // Bind the graphics framebuffer to the baseLayer's framebuffer
@@ -94,6 +129,13 @@ async function onSessionStarted() {
       // Retrieve the pose of the device
       const pose = frame.getViewerPose(xrRefSpace);
 
+      // Create another XRReferenceSpace that has the viewer as the origin.
+      const viewerSpace = await xrSession.requestReferenceSpace("viewer");
+      // Perform hit testing using the viewer as origin.
+      const hitTestSource = await xrSession.requestHitTestSource({
+        space: viewerSpace,
+      });
+
       if (pose) {
         // Use the first view (the only view in AR)
         const view = pose.views[0];
@@ -104,6 +146,35 @@ async function onSessionStarted() {
         camera.matrix.fromArray(view.transform.matrix);
         camera.projectionMatrix.fromArray(view.projectionMatrix);
         camera.updateMatrixWorld(true);
+
+        const hitTestResults = frame.getHitTestResults(hitTestSource);
+        if (hitTestResults.length > 0 && bedModel) {
+          const hitPose = hitTestResults[0].getPose(viewerSpace);
+          bedModel.visible = true;
+          bedModel.position.set(
+            hitPose.transform.position.x,
+            hitPose.transform.position.y,
+            hitPose.transform.position.z
+          );
+          bedModel.updateMatrixWorld(true);
+        }
+
+        // Added light for hit test
+        //const directionalLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        //directionalLight.position.set(10, 15, 10);
+        //scene.add(directionalLight);
+
+        //render
+        renderer.xr.enabled = true;
+
+        // XRSession receives select events when the user performs a primary action.
+        xrSession.addEventListener("select", (event) => {
+          if (bedModel) {
+            const clone = bedModel.clone();
+            clone.position.copy(bedModel.position); // Use the current position of the bed model
+            scene.add(clone);
+          }
+        });
 
         // Render the scene with Three.js
         renderer.render(scene, camera);
@@ -119,9 +190,10 @@ async function onSessionStarted() {
     console.error("Error while trying to activate AR session:", err);
   }
 }
+
 async function onSessionEnded() {
   xrSession = null;
-  document.getElementById("xr-button").innerText = "Start AR";
+  document.getElementById("xr-button").innerText = "Start XR";
   track.stop();
 }
 
