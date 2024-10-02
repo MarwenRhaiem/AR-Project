@@ -40,7 +40,7 @@ function onButtonClicked() {
     // activateButton est un Toggle Button
     xrSession.end().then(() => {
       xrSession = null;
-      document.getElementById("xr-button").innerText = "Enter XR";
+      document.getElementById("xr-button").innerText = "Enter AR";
     });
   }
 }
@@ -193,7 +193,7 @@ async function onSessionStarted() {
 
 async function onSessionEnded() {
   xrSession = null;
-  document.getElementById("xr-button").innerText = "Start XR";
+  document.getElementById("xr-button").innerText = "Start AR";
   track.stop();
 }
 
