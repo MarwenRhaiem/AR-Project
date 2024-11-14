@@ -1,217 +1,255 @@
 import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { ARButton } from "three/addons/webxr/ARButton.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { XREstimatedLight } from "three/addons/webxr/XREstimatedLight.js";
 
-let xrSession = null;
-let gl = null;
-let xrRefSpace = null;
-let track = null;
-
-document.addEventListener("DOMContentLoaded", () => {
-  var xrButton = document.getElementById("xr-button");
-  xrButton.addEventListener("click", onButtonClicked);
-});
-
-function onButtonClicked() {
-  if (!xrSession) {
-    // Check if WebXR is supported
-    if (!navigator.xr) {
-      console.log("WebXR not supported on this browser.");
-      return;
-    }
-    navigator.xr.isSessionSupported("immersive-ar").then((supported) => {
-      if (supported) {
-        navigator.xr
-          .requestSession("immersive-ar", { requiredFeatures: ["hit-test"] })
-          .then(async (session) => {
-            xrSession = session;
-            const stream = await navigator.mediaDevices.getUserMedia({
-              audio: false,
-              video: true,
-            });
-            const videoTracks = stream.getVideoTracks();
-            track = videoTracks[0];
-            document.getElementById("viewer-camera").srcObject = stream;
-            onSessionStarted();
-          });
-      }
-    });
-  } else {
-    // activateButton est un Toggle Button
-    xrSession.end().then(() => {
-      xrSession = null;
-      document.getElementById("xr-button").innerText = "Enter AR";
-    });
+class ARFurnitureViewer {
+  constructor() {
+    this.isPresenting = false;
+    this.initialize();
   }
-}
 
-async function onSessionStarted() {
-  try {
-    xrSession.addEventListener("end", onSessionEnded);
-    // Initialize a WebGL context that is compatible with WebXR
-    const canvas = document.createElement("canvas");
-    document.body.appendChild(canvas);
-    const gl = canvas.getContext("webgl2", { xrCompatible: true });
-
-    if (!gl) {
-      console.error(
-        "WebGL 2 is not supported. Please ensure your browser and device support it."
-      );
-      return;
-    } else {
-      console.log("WebGL 2 is supported");
-    }
-
-    // Set up Three.js scene
-    const scene = new THREE.Scene();
-    const video = document.getElementById("viewer-camera");
-    const background_texture = new THREE.VideoTexture(video);
-    scene.background = background_texture;
-
-    // Load the Bed model
-    const loader = new GLTFLoader();
-    let bedModel;
-
-    loader.load(
-      "models/Bed.glb",
-      function (gltf) {
-        bedModel = gltf.scene;
-        bedModel.scale.set(0.5, 0.5, 0.5); // Adjust scale as needed
-        bedModel.position.set(0, 0, -1); // Set initial position
-        scene.add(bedModel);
-      },
-      undefined,
-      function (error) {
-        console.error("Error loading model: ", error);
-      }
+  initialize() {
+    // Scene setup
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(
+      70,
+      window.innerWidth / window.innerHeight,
+      0.01,
+      20
     );
 
-    // Start Load Flower
-    let flower;
-    loader.load(
-      "https://immersive-web.github.io/webxr-samples/media/gltf/sunflower/sunflower.gltf",
-      function (gltf) {
-        flower = gltf.scene;
-      }
-    );
+    // Models configuration
+    this.models = [
+      "models/dylan_armchair_yolk_yellow.glb",
+      "models/ivan_armchair_mineral_blue.glb",
+      "models/marble_coffee_table.glb",
+      "models/flippa_functional_coffee_table_w._storagewalnut.glb",
+      "models/frame_armchairpetrol_velvet_with_gold_frame.glb",
+      "models/elnaz_nesting_side_tables_brass__green_marble.glb",
+    ];
+    this.modelScaleFactor = [0.01, 0.01, 0.005, 0.01, 0.01, 0.01];
+    this.items = [];
+    this.itemSelectedIndex = 0;
 
-    // Set up the WebGLRenderer, which handles rendering to the session's base layer
-    const renderer = new THREE.WebGLRenderer({
+    // XR variables
+    this.hitTestSource = null;
+    this.hitTestSourceRequested = false;
+
+    this.setupRenderer();
+    this.setupLights();
+    this.setupXR();
+    this.loadModels();
+    this.setupEventListeners();
+    this.animate();
+  }
+
+  setupRenderer() {
+    const canvas = document.getElementById("canvas");
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
       alpha: true,
-      preserveDrawingBuffer: true,
-      canvas: canvas,
-      context: gl,
     });
-    renderer.autoClear = false;
+    this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.xr.enabled = true;
+  }
 
-    // Create a Three.js perspective camera
-    const camera = new THREE.PerspectiveCamera();
-    camera.matrixAutoUpdate = false;
+  setupLights() {
+    this.defaultLight = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+    this.defaultLight.position.set(0.5, 1, 0.25);
+    this.scene.add(this.defaultLight);
 
-    // Request an AR session
-    xrSession.updateRenderState({
-      baseLayer: new XRWebGLLayer(xrSession, gl),
-    });
+    // Try to setup XR estimated light if supported
+    try {
+      this.xrLight = new XREstimatedLight(this.renderer);
 
-    // Request a 'local' reference space for the session
-    xrRefSpace = await xrSession.requestReferenceSpace("local");
-
-    // Rendering loop for AR
-    const onXRFrame = async (time, frame) => {
-      xrSession.requestAnimationFrame(onXRFrame);
-
-      // Bind the graphics framebuffer to the baseLayer's framebuffer
-      gl.bindFramebuffer(
-        gl.FRAMEBUFFER,
-        xrSession.renderState.baseLayer.framebuffer
-      );
-
-      // Retrieve the pose of the device
-      const pose = frame.getViewerPose(xrRefSpace);
-
-      // Create another XRReferenceSpace that has the viewer as the origin.
-      const viewerSpace = await xrSession.requestReferenceSpace("viewer");
-      // Perform hit testing using the viewer as origin.
-      const hitTestSource = await xrSession.requestHitTestSource({
-        space: viewerSpace,
+      this.xrLight.addEventListener("estimationstart", () => {
+        this.scene.add(this.xrLight);
+        this.scene.remove(this.defaultLight);
+        if (this.xrLight.environment) {
+          this.scene.environment = this.xrLight.environment;
+        }
       });
 
-      if (pose) {
-        // Use the first view (the only view in AR)
-        const view = pose.views[0];
-        const viewport = xrSession.renderState.baseLayer.getViewport(view);
-        renderer.setSize(viewport.width, viewport.height);
+      this.xrLight.addEventListener("estimationend", () => {
+        this.scene.add(this.defaultLight);
+        this.scene.remove(this.xrLight);
+      });
+    } catch (error) {
+      console.log("Light estimation not supported, using default lighting");
+    }
+  }
 
-        // Update the camera matrices with the current view
-        camera.matrix.fromArray(view.transform.matrix);
-        camera.projectionMatrix.fromArray(view.projectionMatrix);
-        camera.updateMatrixWorld(true);
-
-        const hitTestResults = frame.getHitTestResults(hitTestSource);
-        if (hitTestResults.length > 0 && bedModel) {
-          const hitPose = hitTestResults[0].getPose(viewerSpace);
-          bedModel.visible = true;
-          bedModel.position.set(
-            hitPose.transform.position.x,
-            hitPose.transform.position.y,
-            hitPose.transform.position.z
-          );
-          bedModel.updateMatrixWorld(true);
-        }
-
-        // Added light for hit test
-        //const directionalLight = new THREE.DirectionalLight(0xffffff, 0.3);
-        //directionalLight.position.set(10, 15, 10);
-        //scene.add(directionalLight);
-
-        //render
-        renderer.xr.enabled = true;
-
-        // XRSession receives select events when the user performs a primary action.
-        xrSession.addEventListener("select", (event) => {
-          if (bedModel) {
-            const clone = bedModel.clone();
-            clone.position.copy(bedModel.position); // Use the current position of the bed model
-            scene.add(clone);
-          }
-        });
-
-        // Render the scene with Three.js
-        renderer.render(scene, camera);
-      }
+  setupXR() {
+    // Modification des options XR pour rendre light-estimation vraiment optionnel
+    const xrSessionInit = {
+      requiredFeatures: ["hit-test"],
+      optionalFeatures: ["dom-overlay"],
+      domOverlay: { root: document.body },
     };
 
-    // Start rendering loop
-    xrSession.requestAnimationFrame(onXRFrame);
+    // Ajout de light-estimation seulement si supporté
+    if (this.xrLight) {
+      xrSessionInit.optionalFeatures.push("light-estimation");
+    }
 
-    // Update the UI to show that the session has started
-    document.getElementById("xr-button").innerText = "Exit AR";
-  } catch (err) {
-    console.error("Error while trying to activate AR session:", err);
+    const arButton = ARButton.createButton(this.renderer, xrSessionInit);
+    document.body.appendChild(arButton);
+
+    // Gestion des événements de session XR
+    this.renderer.xr.addEventListener("sessionstart", () => {
+      this.isPresenting = true;
+    });
+
+    this.renderer.xr.addEventListener("sessionend", () => {
+      this.isPresenting = false;
+      // Redimensionner après la fin de la session
+      this.onWindowResize();
+    });
+
+    this.controller = this.renderer.xr.getController(0);
+    this.controller.addEventListener("select", this.onSelect.bind(this));
+    this.scene.add(this.controller);
+
+    this.reticle = new THREE.Mesh(
+      new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial()
+    );
+    this.reticle.matrixAutoUpdate = false;
+    this.reticle.visible = false;
+    this.scene.add(this.reticle);
+  }
+
+  loadModels() {
+    const loader = new GLTFLoader();
+    this.models.forEach((modelPath, index) => {
+      loader.load(modelPath, (gltf) => {
+        this.items[index] = gltf.scene;
+      });
+    });
+  }
+
+  setupEventListeners() {
+    // Modification de la gestion du redimensionnement
+    window.addEventListener("resize", () => {
+      if (!this.isPresenting) {
+        this.onWindowResize();
+      }
+    });
+
+    // Setup furniture selection
+    for (let i = 0; i < this.models.length; i++) {
+      const el = document.querySelector(`#item${i}`);
+      el.addEventListener("beforexrselect", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.onFurnitureSelect(e, i);
+      });
+    }
+  }
+
+  onWindowResize() {
+    if (!this.isPresenting) {
+      this.camera.aspect = window.innerWidth / window.innerHeight;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+  }
+
+  onFurnitureSelect(event, index) {
+    this.itemSelectedIndex = index;
+
+    // Update selection UI
+    document.querySelectorAll(".button-image").forEach((el) => {
+      el.classList.remove("clicked");
+    });
+    event.target.classList.add("clicked");
+  }
+
+  onSelect() {
+    if (this.reticle.visible) {
+      const selectedModel = this.items[this.itemSelectedIndex]?.clone();
+      if (selectedModel) {
+        this.reticle.matrix.decompose(
+          selectedModel.position,
+          selectedModel.quaternion,
+          selectedModel.scale
+        );
+        const scaleFactor = this.modelScaleFactor[this.itemSelectedIndex];
+        selectedModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+        this.scene.add(selectedModel);
+      }
+    }
+  }
+
+  animate() {
+    this.renderer.setAnimationLoop(this.render.bind(this));
+  }
+
+  render(timestamp, frame) {
+    if (frame) {
+      const referenceSpace = this.renderer.xr.getReferenceSpace();
+      const session = this.renderer.xr.getSession();
+
+      if (!this.hitTestSourceRequested) {
+        session.requestReferenceSpace("viewer").then((referenceSpace) => {
+          session
+            .requestHitTestSource({ space: referenceSpace })
+            .then((source) => {
+              this.hitTestSource = source;
+            })
+            .catch((error) => {
+              console.warn("Hit test source request failed:", error);
+            });
+        });
+
+        session.addEventListener("end", () => {
+          this.hitTestSourceRequested = false;
+          this.hitTestSource = null;
+        });
+
+        this.hitTestSourceRequested = true;
+      }
+
+      if (this.hitTestSource) {
+        const hitTestResults = frame.getHitTestResults(this.hitTestSource);
+        if (hitTestResults.length) {
+          const hit = hitTestResults[0];
+          this.reticle.visible = true;
+          this.reticle.matrix.fromArray(
+            hit.getPose(referenceSpace).transform.matrix
+          );
+        } else {
+          this.reticle.visible = false;
+        }
+      }
+    }
+
+    this.renderer.render(this.scene, this.camera);
   }
 }
 
-async function onSessionEnded() {
-  xrSession = null;
-  document.getElementById("xr-button").innerText = "Start AR";
-  track.stop();
-}
-
-window.onload = () => {
-  "use strict";
-  if ("serviceWorker" in navigator) {
+// Register Service Worker for PWA
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("./sw.js")
-      .then(function (registration) {
-        // Service worker registered correctly.
-        console.log(
-          "ServiceWorker registration successful with scope: ",
-          registration.scope
-        );
+      .then((registration) => {
+        console.log("ServiceWorker registration successful");
       })
-      .catch(function (err) {
-        // Troubles in registering the service worker. :(
+      .catch((err) => {
         console.log("ServiceWorker registration failed: ", err);
       });
-  }
-};
+  });
+}
+
+// Initialize the application
+window.addEventListener("DOMContentLoaded", () => {
+  new ARFurnitureViewer();
+});
