@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# Répertoire local contenant votre code source
+# Répertoire local 
 LOCAL_DIR="/var/www/project"
 
-# Adresse IP ou nom de domaine de votre machine virtuelle Azure
+# Adresse IP de vm
 REMOTE_HOST="98.66.232.248"
 
-# Utilisateur pour la connexion SSH à la machine virtuelle
+# user
 REMOTE_USER="marwen"
 
-# Chemin du répertoire distant sur la machine virtuelle Azure
+# repertoire de projet dans vm
 REMOTE_DIR="/var/www/root"
 
 # Clé SSH pour la connexion à la machine virtuelle
