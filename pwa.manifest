@@ -1,9 +1,27 @@
 {
-  "name": "AR Object",
-  "short_name": "AR Object",
-  "lang": "en-US",
-  "start_url": "index.html",
+  "name": "AR Object Viewer",
+  "short_name": "AR Project",
+  "description": "An AR Object Viewer",
+  "lang": "fr-FR",
+  "start_url": "/index.html",
   "display": "standalone",
-  "background_color": "white",
-  "theme_color": "white"
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff" ,
+  "icons": [
+    {
+      "src": "images/favicon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "images/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "images/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }
