@@ -1,4 +1,3 @@
-#Readme file
 # Advanced Hit-Test for Interior Design
 
 This project provides an advanced hit-test experience for augmented reality (AR) furniture visualization. It allows users to place virtual furniture models into real-world spaces using WebXR and Three.js, enhancing the interior design process, and allowing users to vizualise their ideas.
