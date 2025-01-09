@@ -32,7 +32,6 @@ class ARFurnitureViewer {
     this.items = [];
     this.itemSelectedIndex = 0;
 
-    // XR variables
     this.hitTestSource = null;
     this.hitTestSourceRequested = false;
 
@@ -83,14 +82,13 @@ class ARFurnitureViewer {
   }
 
   setupXR() {
-    // Modification des options XR pour rendre light-estimation vraiment optionnel
+    // OPtionnal light-estimation
     const xrSessionInit = {
       requiredFeatures: ["hit-test"],
       optionalFeatures: ["dom-overlay"],
       domOverlay: { root: document.body },
     };
 
-    // Ajout de light-estimation seulement si supporté
     if (this.xrLight) {
       xrSessionInit.optionalFeatures.push("light-estimation");
     }
@@ -98,14 +96,12 @@ class ARFurnitureViewer {
     const arButton = ARButton.createButton(this.renderer, xrSessionInit);
     document.body.appendChild(arButton);
 
-    // Gestion des événements de session XR
     this.renderer.xr.addEventListener("sessionstart", () => {
       this.isPresenting = true;
     });
 
     this.renderer.xr.addEventListener("sessionend", () => {
       this.isPresenting = false;
-      // Redimensionner après la fin de la session
       this.onWindowResize();
     });
 
@@ -132,7 +128,6 @@ class ARFurnitureViewer {
   }
 
   setupEventListeners() {
-    // Modification de la gestion du redimensionnement
     window.addEventListener("resize", () => {
       if (!this.isPresenting) {
         this.onWindowResize();
@@ -141,7 +136,7 @@ class ARFurnitureViewer {
 
     // Setup furniture selection
     for (let i = 0; i < this.models.length; i++) {
-      const el = document.querySelector(`#item${i}`);
+      const el = document.querySelector('#item${i}');
       el.addEventListener("beforexrselect", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -165,7 +160,6 @@ class ARFurnitureViewer {
   onFurnitureSelect(event, index) {
     this.itemSelectedIndex = index;
 
-    // Update selection UI
     document.querySelectorAll(".button-image").forEach((el) => {
       el.classList.remove("clicked");
     });
@@ -235,7 +229,7 @@ class ARFurnitureViewer {
   }
 }
 
-// Register Service Worker for PWA
+// service Worker
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
