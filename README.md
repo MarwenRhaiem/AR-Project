@@ -23,10 +23,10 @@ This project provides an advanced hit-test experience for augmented reality (AR)
 Here’s a sneak peek at how it works:
 
 App version:
-![AR Furniture Placement](https://drive.google.com/file/d/1tF8EM3cYApf6JBu-hFdQqdcrh_Jwbpqv/view?usp=sharing)  
+[Watch AR Furniture Placement - App Version](https://drive.google.com/file/d/1tF8EM3cYApf6JBu-hFdQqdcrh_Jwbpqv/view?usp=sharing)  
 
 Browser version:
-![AR Furniture Placement](https://drive.google.com/file/d/1uQMAunQWd13M_Go0qs3fFH3zb64maur0/view?usp=sharing)  
+[Watch AR Furniture Placement - App Version](https://drive.google.com/file/d/1uQMAunQWd13M_Go0qs3fFH3zb64maur0/view?usp=sharing)  
 
 
 
